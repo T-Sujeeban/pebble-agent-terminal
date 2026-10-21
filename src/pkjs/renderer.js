@@ -436,6 +436,46 @@ function hydrate(html, o) {
   });
 }
 
+// The Pebble system font has limited glyph coverage: no emoji, no variation
+// selectors, and accented Latin characters may or may not be present depending
+// on the watch model. Strip diacritics (é→e, ç→c), drop emoji/supplementary
+// plane chars and variation selectors, and NFC-normalize so the WebView
+// measures exactly what the watch can render.
+function sanitizeText(text) {
+  if (!text) return text;
+  try { text = text.normalize('NFC'); } catch (e) {}
+  var out = '';
+  for (var i = 0; i < text.length; i++) {
+    var cp = text.codePointAt(i);
+    // Drop supplementary-plane characters (emoji, etc.) — skip low surrogate
+    if (cp > 0xffff) { i++; continue; }
+    // Drop variation selectors (U+FE00–U+FE0F), ZWJ, ZWNJ
+    if ((cp >= 0xfe00 && cp <= 0xfe0f) || cp === 0x200d || cp === 0x200c) continue;
+    // Replace lone surrogates (shouldn't happen in well-formed DOM text)
+    if (cp >= 0xd800 && cp <= 0xdfff) { out += '?'; continue; }
+    var ch = text.charAt(i);
+    if (cp >= 0x80) {
+      // Strip diacritics: NFD decompose → remove combining marks (U+0300–U+036F)
+      try {
+        var nfd = ch.normalize('NFD');
+        var stripped = '';
+        for (var k = 0; k < nfd.length; k++) {
+          var cc = nfd.charCodeAt(k);
+          if (cc >= 0x0300 && cc <= 0x036f) continue;
+          stripped += nfd.charAt(k);
+        }
+        // Use the stripped version only if it collapsed to a single ASCII char
+        if (stripped.length === 1 && stripped.charCodeAt(0) < 0x80) {
+          out += stripped;
+          continue;
+        }
+      } catch (e) {}
+    }
+    out += ch;
+  }
+  return out;
+}
+
 // The watch is fed the original characters; the transform's zero-width spaces,
 // word joiners and forced newlines exist only to steer Chromium.
 function sourceText(meta, from, to) {
@@ -502,7 +542,7 @@ function applyPebbleFonts(win, doc, o) {
     st.setProperty('font-size', FACE_PX[j.font >> 1] + 'px', 'important');
     st.setProperty('font-weight', (j.font & 1) ? '700' : '400', 'important');
 
-    var text = j.node.nodeValue.replace(/\s+/g, ' ');
+    var text = sanitizeText(j.node.nodeValue.replace(/\s+/g, ' '));
     if (!j.node.previousSibling) text = text.replace(/^ /, '');
     if (!j.node.nextSibling) text = text.replace(/ $/, '');
     if (!text) continue;
@@ -1060,3 +1100,4 @@ function renderReadable(html, opts) {
 }
 
 module.exports = { render: render, renderReadable: renderReadable, CONFIG: CONFIG };
+
