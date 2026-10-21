@@ -441,6 +441,16 @@ function hydrate(html, o) {
 // on the watch model. Strip diacritics (é→e, ç→c), drop emoji/supplementary
 // plane chars and variation selectors, and NFC-normalize so the WebView
 // measures exactly what the watch can render.
+//
+// Characters >= 0x80 that the Pebble Gothic fonts are known to render.
+// Everything else non-ASCII gets replaced with '?' as a safety net.
+var SAFE_NON_ASCII = {
+  0x00B0: 1, // ° degree sign
+  0x00B7: 1, // · middle dot
+  0x00D7: 1, // × multiplication sign
+  0x00F7: 1, // ÷ division sign
+};
+
 function sanitizeText(text) {
   if (!text) return text;
   try { text = text.normalize('NFC'); } catch (e) {}
@@ -456,6 +466,7 @@ function sanitizeText(text) {
     var ch = text.charAt(i);
     if (cp >= 0x80) {
       // Strip diacritics: NFD decompose → remove combining marks (U+0300–U+036F)
+      var replaced = false;
       try {
         var nfd = ch.normalize('NFD');
         var stripped = '';
@@ -467,9 +478,14 @@ function sanitizeText(text) {
         // Use the stripped version only if it collapsed to a single ASCII char
         if (stripped.length === 1 && stripped.charCodeAt(0) < 0x80) {
           out += stripped;
-          continue;
+          replaced = true;
         }
       } catch (e) {}
+      if (!replaced) {
+        // NFD didn't produce ASCII — use whitelisted chars, else '?'
+        out += SAFE_NON_ASCII[cp] ? ch : '?';
+      }
+      continue;
     }
     out += ch;
   }
