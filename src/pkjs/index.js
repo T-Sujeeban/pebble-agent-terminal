@@ -16,6 +16,7 @@ var CMD_HELLO_ROUND = 0x10000;
 
 var s_width = 200;
 var s_round = false;
+var APP_VERSION = '0.2.0';
 
 function log(msg) {
   console.log('[agent-terminal] ' + msg);
@@ -156,10 +157,10 @@ function buildWelcomePage() {
   list.color(0xAA);
   list.text(20, cardY + 54, dl.FONT.GOTHIC_14, 'BACK = home');
 
-  // Footer
+  // Footer with version
   var footerY = cardY + cardH + 16;
   list.color(0xAA);
-  list.text(64, footerY, dl.FONT.GOTHIC_14, 'Mistral AI');
+  list.text(32, footerY, dl.FONT.GOTHIC_14, 'Mistral AI v' + APP_VERSION);
 
   return list.finish(footerY + 18);
 }
@@ -210,7 +211,7 @@ function configPage() {
     '#save{background:#0a7cff;color:#fff}#cancel{background:#e4e4e4;color:#222}' +
     '.danger{background:#f44336;color:#fff;margin-top:10px}' +
     '</style>' +
-    '<h1>Agent Terminal</h1>' +
+    '<h1>Agent Terminal <span style="font-size:12px;color:#999;font-weight:normal;">v' + APP_VERSION + '</span></h1>' +
     '<p>Configure your Mistral AI agent. Get an API key at <strong>console.mistral.ai</strong>.</p>' +
     '<label for="key">Mistral API Key</label>' +
     '<input id="key" type="password" placeholder="sk-..." value="' + escAttr(cfg.apiKey) + '">' +
