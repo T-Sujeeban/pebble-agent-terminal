@@ -125,6 +125,7 @@ function configPage() {
     '<textarea id="prompt" style="width:100%;height:20vh;box-sizing:border-box;font:12px ui-monospace,Menlo,monospace;padding:10px;border:1px solid #ccc;border-radius:8px;background:#fff;resize:vertical;">' + escHtml(cfg.systemPrompt) + '</textarea>' +
     '<div class=row><button id=cancel>Cancel</button><button id=save>Save</button></div>' +
     '<button id="clear" class=danger>Clear conversation history</button>' +
+    '<button id="resetPrompt" style="background:#ff9800;color:#fff;margin-top:10px;">Reset prompt to default</button>' +
     '<script>' +
     'function close(v){location.href="pebblejs://close#"+encodeURIComponent(JSON.stringify(v));}' +
     'document.getElementById("cancel").onclick=function(){close({});};' +
@@ -133,6 +134,10 @@ function configPage() {
     'model:document.getElementById("model").value,' +
     'systemPrompt:document.getElementById("prompt").value});};' +
     'document.getElementById("clear").onclick=function(){close({clearHistory:true});};' +
+    'document.getElementById("resetPrompt").onclick=function(){' +
+    'close({apiKey:document.getElementById("key").value.trim(),' +
+    'model:document.getElementById("model").value,' +
+    'resetPrompt:true});};' +
     '<\/script>';
   return 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
 }
@@ -177,7 +182,7 @@ Pebble.addEventListener('webviewclosed', function (e) {
     log('conversation history cleared');
     return;
   }
-  if (cfg.apiKey || cfg.model || cfg.systemPrompt !== undefined) {
+  if (cfg.apiKey || cfg.model || cfg.systemPrompt !== undefined || cfg.resetPrompt) {
     agent.saveConfig(cfg);
     agent.resetConversation();
     log('config saved');
