@@ -78,6 +78,89 @@ function sendSimplePage(title, lines, color) {
   });
 }
 
+// --- Welcome page (Mistral-branded home screen) -----------------------------
+
+function buildWelcomePage() {
+  var list = new dl.DisplayList(s_width);
+  var W = s_width;
+
+  // Mistral gradient header: 4 horizontal strips (yellow → orange → red → dark red)
+  var gradColors = [
+    dl.toGColor8(255, 216, 0),   // #FFD800 yellow
+    dl.toGColor8(255, 112, 0),   // #FF7000 orange
+    dl.toGColor8(196, 30, 58),   // #C41E3A red
+    dl.toGColor8(107, 15, 26),   // #6B0F1A dark red
+  ];
+  var stripH = 16;
+  var headerH = gradColors.length * stripH; // 64px
+  for (var i = 0; i < gradColors.length; i++) {
+    list.fill(0, i * stripH, W, stripH, gradColors[i]);
+  }
+
+  // Pixel-art "M" logo in white, centered on the gradient
+  // 5×5 M pattern at 6px per pixel = 30×30 px
+  var px = 6;
+  var logoSize = 5 * px;
+  var logoX = Math.floor((W - logoSize) / 2);
+  var logoY = 10;
+  var mRows = [
+    [1, 0, 0, 0, 1],
+    [1, 1, 0, 1, 1],
+    [1, 0, 1, 0, 1],
+    [1, 0, 0, 0, 1],
+    [1, 0, 0, 0, 1],
+  ];
+  for (var row = 0; row < 5; row++) {
+    var col = 0;
+    while (col < 5) {
+      if (mRows[row][col]) {
+        var start = col;
+        while (col < 5 && mRows[row][col]) col++;
+        list.fill(logoX + start * px, logoY + row * px, (col - start) * px, px, 0xFF);
+      } else {
+        col++;
+      }
+    }
+  }
+
+  // Title: "Agent Terminal" in white below the logo
+  list.color(0xFF);
+  var titleY = logoY + logoSize + 4;
+  list.text(35, titleY, dl.FONT.GOTHIC_18_BOLD, 'Agent Terminal');
+
+  // Subtitle: "Powered by Mistral AI"
+  var subY = titleY + 20;
+  list.text(16, subY, dl.FONT.GOTHIC_14, 'Powered by Mistral AI');
+
+  // Instructions card (light gray rounded-feel box)
+  var cardY = headerH + 14;
+  var cardH = 72;
+  list.fill(8, cardY, W - 16, cardH, 0xF0);
+  list.color(0xC0);
+  list.text(20, cardY + 10, dl.FONT.GOTHIC_18_BOLD, 'Press SELECT');
+  list.text(20, cardY + 32, dl.FONT.GOTHIC_18, 'to talk');
+  list.color(0xAA);
+  list.text(20, cardY + 54, dl.FONT.GOTHIC_14, 'BACK = home');
+
+  // Footer
+  var footerY = cardY + cardH + 16;
+  list.color(0xAA);
+  list.text(64, footerY, dl.FONT.GOTHIC_14, 'Mistral AI');
+
+  return list.finish(footerY + 18);
+}
+
+function sendWelcomePage() {
+  var bytes = buildWelcomePage();
+  var transport = require('./transport');
+  var pageId = (Math.floor(Math.random() * 256)) & 0xff;
+  transport.sendBuffer(bytes, pageId, {
+    onDone: function (err) {
+      if (err) log('send welcome failed: ' + err);
+    },
+  });
+}
+
 // --- Agent callbacks -------------------------------------------------------
 
 var agentCallbacks = {
@@ -208,7 +291,7 @@ Pebble.addEventListener('appmessage', function (e) {
       log('hello, width=' + s_width);
       agent.resetConversation();
       status('Agent Terminal');
-      sendSimplePage('Agent Terminal', ['Press SELECT', 'to talk'], '#2196F3');
+      sendWelcomePage();
       break;
 
     case CMD_TEXT:
