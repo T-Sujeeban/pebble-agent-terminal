@@ -12,11 +12,12 @@ var agent = require('./agent');
 var CMD_HELLO = 1;
 var CMD_TEXT = 6;
 var CMD_CANCEL = 10;
+var CMD_HOME = 11;
 var CMD_HELLO_ROUND = 0x10000;
 
 var s_width = 200;
 var s_round = false;
-var APP_VERSION = '0.2.0';
+var APP_VERSION = '0.2.1';
 
 function log(msg) {
   console.log('[agent-terminal] ' + msg);
@@ -147,10 +148,10 @@ function buildWelcomePage() {
   var subY = titleY + 20;
   list.text(16, subY, dl.FONT.GOTHIC_14, 'Powered by Mistral AI');
 
-  // Instructions card (light gray rounded-feel box)
+  // Instructions card (light gray box — 0xEA = GColor8 medium-light gray)
   var cardY = headerH + 14;
   var cardH = 72;
-  list.fill(8, cardY, W - 16, cardH, 0xF0);
+  list.fill(8, cardY, W - 16, cardH, dl.toGColor8(200, 200, 200));
   list.color(0xC0);
   list.text(20, cardY + 10, dl.FONT.GOTHIC_18_BOLD, 'Press SELECT');
   list.text(20, cardY + 32, dl.FONT.GOTHIC_18, 'to talk');
@@ -305,6 +306,13 @@ Pebble.addEventListener('appmessage', function (e) {
       s_round = !!(arg & CMD_HELLO_ROUND);
       log('hello, width=' + s_width);
       agent.resetConversation();
+      status('Agent Terminal');
+      sendWelcomePage();
+      break;
+
+    case CMD_HOME:
+      // BACK pressed while browsing — show welcome page, keep conversation
+      log('home');
       status('Agent Terminal');
       sendWelcomePage();
       break;

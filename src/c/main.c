@@ -24,6 +24,7 @@
 #define CHROME_TICK_MS 250
 #define BUSY_TICKS_THINKING 200 // 50s — agent calls can be slow
 #define DICTATION_BYTES 256
+#define CMD_HOME 11 // request welcome page without resetting conversation
 
 typedef enum {
   STATE_IDLE = 0,
@@ -220,12 +221,11 @@ static void prv_page_update(Layer *layer, GContext *ctx) {
   if (s_have_page && s_state == STATE_BROWSING) {
     dl_render(ctx, &s_dl, b, s_scroll_y);
   } else if (s_state == STATE_IDLE) {
+    // Brief loading state — the phone sends the branded welcome page
+    // shortly after CMD_HELLO / CMD_HOME.
     graphics_context_set_text_color(ctx, GColorDarkGray);
-    graphics_draw_text(ctx, "Press SELECT", fonts_get_system_font(FONT_KEY_GOTHIC_14),
-                       GRect(0, b.size.h / 2 - 20, b.size.w, 20),
-                       GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-    graphics_draw_text(ctx, "to talk to the agent", fonts_get_system_font(FONT_KEY_GOTHIC_14),
-                       GRect(0, b.size.h / 2 + 2, b.size.w, 20),
+    graphics_draw_text(ctx, "Loading...", fonts_get_system_font(FONT_KEY_GOTHIC_14),
+                       GRect(0, b.size.h / 2 - 8, b.size.w, 20),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   }
 }
@@ -279,7 +279,8 @@ static void prv_select_click(ClickRecognizerRef r, void *ctx) {
 static void prv_back_click(ClickRecognizerRef r, void *ctx) {
   switch (s_state) {
     case STATE_BROWSING:
-      prv_set_state(STATE_IDLE);
+      // Request the branded welcome page from the phone (conversation preserved)
+      net_send_cmd(CMD_HOME, 0);
       break;
     case STATE_THINKING:
       net_send_cmd(CMD_CANCEL, 0);
