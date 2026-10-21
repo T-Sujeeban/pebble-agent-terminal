@@ -1,7 +1,7 @@
 {
   "name": "pebble-agent-terminal",
   "author": "Sujeeban Thuraisamy",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "keywords": ["pebble-app", "ai", "agent", "mistral"],
   "private": true,
   "dependencies": {},
@@ -28,6 +28,6 @@
       "media": []
     },
     "capabilities": ["configurable"],
-    "versionLabel": "0.1.0"
+    "versionLabel": "0.2.0"
   }
 }
