@@ -72,6 +72,16 @@ function encodeText(str) {
   return out;
 }
 
+// Find the largest byte offset <= maxBytes that does not split a multi-byte
+// UTF-8 sequence. UTF-8 continuation bytes have the pattern 10xxxxxx (0x80–0xBF).
+function safeUtf8Boundary(bytes, maxBytes) {
+  if (maxBytes >= bytes.length) return bytes.length;
+  var off = maxBytes;
+  // Back up at most 3 bytes to avoid landing in the middle of a sequence
+  while (off > 0 && (bytes[off] & 0xc0) === 0x80) off--;
+  return off;
+}
+
 function DisplayList(pageW) {
   this.w = new Writer();
   this.pageW = pageW;
@@ -82,12 +92,17 @@ function DisplayList(pageW) {
 
 DisplayList.prototype.text = function (x, y, font, str) {
   var bytes = encodeText(str);
-  // len is u8; split overlong runs rather than truncating them.
-  for (var off = 0; off < bytes.length; off += 255) {
-    var slice = bytes.slice(off, off + 255);
+  // len is u8; split overlong runs at safe UTF-8 boundaries so no multi-byte
+  // character is split across two DL_OP_TEXT ops (which would produce
+  // invalid UTF-8 on the watch and cause graphics_draw_text to drop the run).
+  var off = 0;
+  while (off < bytes.length) {
+    var end = safeUtf8Boundary(bytes, off + 255);
+    var slice = bytes.slice(off, end);
     this.w.u8(OP.TEXT).i16(x).i16(y).u8(font).u8(slice.length);
     for (var i = 0; i < slice.length; i++) this.w.u8(slice[i]);
-    if (off + 255 < bytes.length) x = 0; // continuation lines start at margin
+    off = end;
+    if (off < bytes.length) x = 0; // continuation lines start at margin
   }
   return this;
 };
@@ -109,9 +124,11 @@ DisplayList.prototype.image = function (x, y, w, h, pngBytes) {
 };
 
 DisplayList.prototype.input = function (x, y, w, h, field, flags, placeholder) {
-  var bytes = encodeText(placeholder || '').slice(0, 255);
-  this.w.u8(OP.INPUT).i16(x).i16(y).i16(w).i16(h).u16(field).u8(flags || 0).u8(bytes.length);
-  for (var i = 0; i < bytes.length; i++) this.w.u8(bytes[i]);
+  var bytes = encodeText(placeholder || '');
+  var end = safeUtf8Boundary(bytes, 255);
+  var slice = bytes.slice(0, end);
+  this.w.u8(OP.INPUT).i16(x).i16(y).i16(w).i16(h).u16(field).u8(flags || 0).u8(slice.length);
+  for (var i = 0; i < slice.length; i++) this.w.u8(slice[i]);
   return this;
 };
 
