@@ -25,6 +25,20 @@ function status(text) {
   try { Pebble.sendAppMessage({ STATUS: String(text).slice(0, 63) }); } catch (e) {}
 }
 
+// Strip accents and non-ASCII from dictation input so the AI always
+// receives clean ASCII text (and the conversation history stays ASCII).
+function sanitizeDictation(text) {
+  try { text = text.normalize('NFD'); } catch (e) { return text; }
+  var out = '';
+  for (var i = 0; i < text.length; i++) {
+    var cc = text.charCodeAt(i);
+    if (cc >= 0x0300 && cc <= 0x036f) continue; // combining marks
+    if (cc < 0x20 || cc > 0x7e) { out += '?'; continue; } // non-printable-ASCII
+    out += text.charAt(i);
+  }
+  return out;
+}
+
 // --- Page builders for error/idle states -----------------------------------
 
 var dl = require('./dl');
@@ -300,8 +314,9 @@ Pebble.addEventListener('appmessage', function (e) {
         log('empty text');
         return;
       }
+      text = sanitizeDictation(String(text));
       log('user: ' + text);
-      agent.askAgent(String(text), agentCallbacks);
+      agent.askAgent(text, agentCallbacks);
       break;
 
     case CMD_CANCEL:
