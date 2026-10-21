@@ -255,9 +255,7 @@ function renderAndSend(html, token, callbacks) {
     width: 200,
     round: false,
     scripts: false,
-    images: true,
-    minImagePx: 32,
-    maxImageBytes: 16000,
+    images: false,
     segment: 0,
   }).then(function (res) {
     if (requestToken !== token) return;
