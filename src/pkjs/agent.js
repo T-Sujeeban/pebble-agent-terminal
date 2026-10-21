@@ -3,6 +3,7 @@
 // Responsibilities:
 //   - Manage conversation history (system prompt + user/assistant turns)
 //   - Call the Mistral chat completions API
+//   - Fetch available models from Mistral /v1/models
 //   - Extract HTML from the agent's response (strip markdown fences, etc.)
 //   - Render HTML → display list via renderer.js
 //   - Send the display list to the watch via transport.js
@@ -12,9 +13,14 @@ var transport = require('./transport');
 var skill = require('./skill');
 
 var MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
+var MISTRAL_MODELS_URL = 'https://api.mistral.ai/v1/models';
 var DEFAULT_MODEL = 'mistral-small-latest';
 var MAX_HISTORY_MESSAGES = 40;
 var REQUEST_TIMEOUT_MS = 45000;
+
+function log(msg) {
+  console.log('[agent] ' + msg);
+}
 
 // --- Storage ---------------------------------------------------------------
 
@@ -36,8 +42,6 @@ function removeStore(key) {
 function getConfig() {
   var storedPrompt = store('agent_system_prompt');
   var storedVersion = store('agent_system_prompt_version');
-  // Use the built-in default if no prompt is stored, or if the stored prompt
-  // was saved by an older app version (version mismatch → auto-upgrade).
   var useDefault = !storedPrompt || storedVersion !== skill.SKILL_PROMPT_VERSION;
   return {
     apiKey: store('agent_api_key') || '',
@@ -135,6 +139,52 @@ function sanitizeHtml(html) {
   return html;
 }
 
+// --- Fetch available models ------------------------------------------------
+
+// Fetch available chat models from Mistral /v1/models.
+// callback(models) — models is an array of model id strings, or null on error.
+function fetchModels(apiKey, callback) {
+  if (!apiKey) { callback(null); return; }
+
+  var xhr = new XMLHttpRequest();
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState !== 4) return;
+    if (xhr.status >= 200 && xhr.status < 300) {
+      try {
+        var data = JSON.parse(xhr.responseText);
+        var all = data.data || [];
+        // Prefer chat-capable models; fall back to all if capability info missing
+        var chatModels = all.filter(function (m) {
+          if (!m.capabilities) return true;
+          return m.capabilities.completion_chat === true ||
+                 m.capabilities.chat_completion === true;
+        });
+        var ids = (chatModels.length > 0 ? chatModels : all).map(function (m) {
+          return m.id;
+        });
+        ids.sort();
+        log('fetched ' + ids.length + ' models');
+        callback(ids);
+      } catch (e) {
+        log('fetchModels parse error: ' + e);
+        callback(null);
+      }
+    } else {
+      log('fetchModels HTTP ' + xhr.status);
+      callback(null);
+    }
+  };
+
+  xhr.open('GET', MISTRAL_MODELS_URL, true);
+  xhr.setRequestHeader('Authorization', 'Bearer ' + apiKey);
+  try {
+    xhr.send();
+  } catch (e) {
+    log('fetchModels send error: ' + e);
+    callback(null);
+  }
+}
+
 // --- Mistral API call ------------------------------------------------------
 
 var currentRequest = null;
@@ -147,10 +197,6 @@ function cancelRequest() {
   }
   currentRequest = null;
   transport.cancel();
-}
-
-function log(msg) {
-  console.log('[agent] ' + msg);
 }
 
 function askAgent(userText, callbacks) {
@@ -300,6 +346,7 @@ module.exports = {
   resetConversation: resetConversation,
   getConfig: getConfig,
   saveConfig: saveConfig,
+  fetchModels: fetchModels,
   extractHtml: extractHtml,
   sanitizeHtml: sanitizeHtml,
   conversation: conversation,

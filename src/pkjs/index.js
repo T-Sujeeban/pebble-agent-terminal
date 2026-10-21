@@ -17,7 +17,7 @@ var CMD_HELLO_ROUND = 0x10000;
 
 var s_width = 200;
 var s_round = false;
-var APP_VERSION = '0.2.1';
+var APP_VERSION = '0.2.2';
 
 function log(msg) {
   console.log('[agent-terminal] ' + msg);
@@ -25,20 +25,6 @@ function log(msg) {
 
 function status(text) {
   try { Pebble.sendAppMessage({ STATUS: String(text).slice(0, 63) }); } catch (e) {}
-}
-
-// Strip accents and non-ASCII from dictation input so the AI always
-// receives clean ASCII text (and the conversation history stays ASCII).
-function sanitizeDictation(text) {
-  try { text = text.normalize('NFD'); } catch (e) { return text; }
-  var out = '';
-  for (var i = 0; i < text.length; i++) {
-    var cc = text.charCodeAt(i);
-    if (cc >= 0x0300 && cc <= 0x036f) continue; // combining marks
-    if (cc < 0x20 || cc > 0x7e) { out += '?'; continue; } // non-printable-ASCII
-    out += text.charAt(i);
-  }
-  return out;
 }
 
 // --- Page builders for error/idle states -----------------------------------
@@ -114,7 +100,6 @@ function buildWelcomePage() {
   }
 
   // Pixel-art "M" logo in white, centered on the gradient
-  // 5×5 M pattern at 6px per pixel = 30×30 px
   var px = 6;
   var logoSize = 5 * px;
   var logoX = Math.floor((W - logoSize) / 2);
@@ -139,16 +124,14 @@ function buildWelcomePage() {
     }
   }
 
-  // Title: "Agent Terminal" in white below the logo
   list.color(0xFF);
   var titleY = logoY + logoSize + 4;
   list.text(35, titleY, dl.FONT.GOTHIC_18_BOLD, 'Agent Terminal');
 
-  // Subtitle: "Powered by Mistral AI"
   var subY = titleY + 20;
   list.text(16, subY, dl.FONT.GOTHIC_14, 'Powered by Mistral AI');
 
-  // Instructions card (light gray box — 0xEA = GColor8 medium-light gray)
+  // Instructions card (light gray box)
   var cardY = headerH + 14;
   var cardH = 72;
   list.fill(8, cardY, W - 16, cardH, dl.toGColor8(200, 200, 200));
@@ -158,7 +141,6 @@ function buildWelcomePage() {
   list.color(0xAA);
   list.text(20, cardY + 54, dl.FONT.GOTHIC_14, 'BACK = home');
 
-  // Footer with version
   var footerY = cardY + cardH + 16;
   list.color(0xAA);
   list.text(32, footerY, dl.FONT.GOTHIC_14, 'Mistral AI v' + APP_VERSION);
@@ -195,8 +177,30 @@ var agentCallbacks = {
 
 // --- Settings page ---------------------------------------------------------
 
+var FALLBACK_MODELS = [
+  'mistral-small-latest',
+  'mistral-medium-latest',
+  'mistral-large-latest',
+  'open-mistral-nemo',
+  'codestral-latest',
+];
+
+var cachedModels = null;
+
+function modelDatalist(currentModel) {
+  var models = (cachedModels && cachedModels.length > 0) ? cachedModels : FALLBACK_MODELS;
+  if (models.indexOf(currentModel) === -1) {
+    models = [currentModel].concat(models);
+  }
+  return models.map(function (m) {
+    return '<option value="' + escAttr(m) + '">';
+  }).join('');
+}
+
 function configPage() {
   var cfg = agent.getConfig();
+  var modelCount = (cachedModels && cachedModels.length > 0) ? cachedModels.length : FALLBACK_MODELS.length;
+  var modelSource = (cachedModels && cachedModels.length > 0) ? 'live from Mistral API' : 'built-in fallback';
   var html =
     '<!doctype html><meta charset=utf-8>' +
     '<meta name=viewport content="width=device-width,initial-scale=1">' +
@@ -211,15 +215,16 @@ function configPage() {
     'button{flex:1;padding:13px;font-size:16px;border:0;border-radius:8px}' +
     '#save{background:#0a7cff;color:#fff}#cancel{background:#e4e4e4;color:#222}' +
     '.danger{background:#f44336;color:#fff;margin-top:10px}' +
+    '.hint{font-size:11px;color:#999;margin-top:2px}' +
     '</style>' +
     '<h1>Agent Terminal <span style="font-size:12px;color:#999;font-weight:normal;">v' + APP_VERSION + '</span></h1>' +
     '<p>Configure your Mistral AI agent. Get an API key at <strong>console.mistral.ai</strong>.</p>' +
     '<label for="key">Mistral API Key</label>' +
     '<input id="key" type="password" placeholder="sk-..." value="' + escAttr(cfg.apiKey) + '">' +
     '<label for="model">Model</label>' +
-    '<select id="model">' +
-    modelOptions(cfg.model) +
-    '</select>' +
+    '<input id="model" list="modelList" value="' + escAttr(cfg.model) + '" placeholder="mistral-small-latest">' +
+    '<datalist id="modelList">' + modelDatalist(cfg.model) + '</datalist>' +
+    '<div class="hint">' + modelCount + ' models (' + modelSource + ') — type any model name</div>' +
     '<label for="prompt">System Prompt (advanced)</label>' +
     '<textarea id="prompt" style="width:100%;height:20vh;box-sizing:border-box;font:12px ui-monospace,Menlo,monospace;padding:10px;border:1px solid #ccc;border-radius:8px;background:#fff;resize:vertical;">' + escHtml(cfg.systemPrompt) + '</textarea>' +
     '<div class=row><button id=cancel>Cancel</button><button id=save>Save</button></div>' +
@@ -230,28 +235,15 @@ function configPage() {
     'document.getElementById("cancel").onclick=function(){close({});};' +
     'document.getElementById("save").onclick=function(){' +
     'close({apiKey:document.getElementById("key").value.trim(),' +
-    'model:document.getElementById("model").value,' +
+    'model:document.getElementById("model").value.trim(),' +
     'systemPrompt:document.getElementById("prompt").value});};' +
     'document.getElementById("clear").onclick=function(){close({clearHistory:true});};' +
     'document.getElementById("resetPrompt").onclick=function(){' +
     'close({apiKey:document.getElementById("key").value.trim(),' +
-    'model:document.getElementById("model").value,' +
+    'model:document.getElementById("model").value.trim(),' +
     'resetPrompt:true});};' +
     '<\/script>';
   return 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-}
-
-function modelOptions(selected) {
-  var models = [
-    'mistral-small-latest',
-    'mistral-medium-latest',
-    'mistral-large-latest',
-    'open-mistral-nemo',
-    'codestral-latest',
-  ];
-  return models.map(function (m) {
-    return '<option value="' + m + '"' + (m === selected ? ' selected' : '') + '>' + m + '</option>';
-  }).join('');
 }
 
 function escAttr(s) {
@@ -265,7 +257,17 @@ function escHtml(s) {
 // --- Event listeners -------------------------------------------------------
 
 Pebble.addEventListener('showConfiguration', function () {
-  Pebble.openURL(configPage());
+  var cfg = agent.getConfig();
+  if (cfg.apiKey) {
+    log('fetching model list...');
+    agent.fetchModels(cfg.apiKey, function (models) {
+      cachedModels = models;
+      Pebble.openURL(configPage());
+    });
+  } else {
+    cachedModels = null;
+    Pebble.openURL(configPage());
+  }
 });
 
 Pebble.addEventListener('webviewclosed', function (e) {
@@ -311,7 +313,6 @@ Pebble.addEventListener('appmessage', function (e) {
       break;
 
     case CMD_HOME:
-      // BACK pressed while browsing — show welcome page, keep conversation
       log('home');
       status('Agent Terminal');
       sendWelcomePage();
@@ -323,7 +324,8 @@ Pebble.addEventListener('appmessage', function (e) {
         log('empty text');
         return;
       }
-      text = sanitizeDictation(String(text));
+      // Send raw dictation text — the AI interprets garbled/missing-accent text
+      text = String(text);
       log('user: ' + text);
       agent.askAgent(text, agentCallbacks);
       break;
