@@ -156,7 +156,7 @@ function askAgent(userText, callbacks) {
     model: cfg.model,
     messages: messages,
     temperature: 0.3,
-    max_tokens: 1024,
+    max_tokens: 2048,
   });
 
   log('calling Mistral (' + cfg.model + ', ' + messages.length + ' messages)');
@@ -240,7 +240,9 @@ function renderAndSend(html, token, callbacks) {
     width: 200,
     round: false,
     scripts: false,
-    images: false,
+    images: true,
+    minImagePx: 32,
+    maxImageBytes: 16000,
     segment: 0,
   }).then(function (res) {
     if (requestToken !== token) return;
