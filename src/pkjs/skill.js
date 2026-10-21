@@ -88,4 +88,6 @@ var SKILL_PROMPT = [
   '<p style="font-size:14px;color:#555;margin:8px;">240 x 0.15 = 36</p>',
 ].join('\n');
 
-module.exports = { SKILL_PROMPT: SKILL_PROMPT };
+var SKILL_PROMPT_VERSION = 2;
+
+module.exports = { SKILL_PROMPT: SKILL_PROMPT, SKILL_PROMPT_VERSION: SKILL_PROMPT_VERSION };
