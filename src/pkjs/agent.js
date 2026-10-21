@@ -29,18 +29,33 @@ function store(key, value) {
   return null;
 }
 
+function removeStore(key) {
+  try { localStorage.removeItem(key); } catch (e) {}
+}
+
 function getConfig() {
+  var storedPrompt = store('agent_system_prompt');
+  var storedVersion = store('agent_system_prompt_version');
+  // Use the built-in default if no prompt is stored, or if the stored prompt
+  // was saved by an older app version (version mismatch → auto-upgrade).
+  var useDefault = !storedPrompt || storedVersion !== skill.SKILL_PROMPT_VERSION;
   return {
     apiKey: store('agent_api_key') || '',
     model: store('agent_model') || DEFAULT_MODEL,
-    systemPrompt: store('agent_system_prompt') || skill.SKILL_PROMPT,
+    systemPrompt: useDefault ? skill.SKILL_PROMPT : storedPrompt,
   };
 }
 
 function saveConfig(cfg) {
   if (cfg.apiKey !== undefined) store('agent_api_key', cfg.apiKey);
   if (cfg.model !== undefined) store('agent_model', cfg.model);
-  if (cfg.systemPrompt !== undefined) store('agent_system_prompt', cfg.systemPrompt);
+  if (cfg.resetPrompt) {
+    removeStore('agent_system_prompt');
+    removeStore('agent_system_prompt_version');
+  } else if (cfg.systemPrompt !== undefined) {
+    store('agent_system_prompt', cfg.systemPrompt);
+    store('agent_system_prompt_version', skill.SKILL_PROMPT_VERSION);
+  }
 }
 
 // --- Conversation history --------------------------------------------------
