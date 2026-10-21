@@ -1,0 +1,48 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pebble-tool
+        run: pip install pebble-tool
+
+      - name: Install Pebble SDK
+        run: pebble sdk install latest
+
+      - name: Build .pbw
+        run: pebble build
+
+      - name: Run PKJS tests
+        run: node --test test/*.js
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pebble-agent-terminal
+          path: build/pebble-agent-terminal.pbw
+          retention-days: 30
+
+      - name: Create GitHub Release (on main push)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/pebble-agent-terminal.pbw
+          tag_name: v${{ github.run_number }}
+          name: Build ${{ github.run_number }}
+          draft: false
+          prerelease: true
