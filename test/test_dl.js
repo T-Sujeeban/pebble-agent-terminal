@@ -53,6 +53,43 @@ test('dl: long text splits into 255-byte chunks', function () {
   assert.strictEqual(bytes[secondOpOffset + 6], 45);
 });
 
+test('dl: long text with multi-byte UTF-8 does not split characters across chunks', function () {
+  // Build a string where a 2-byte UTF-8 char (é = 0xC3 0xA9) straddles the 255-byte boundary.
+  // 254 ASCII chars + é = 254 + 2 = 256 bytes. The é should go entirely into chunk 2.
+  var list = new dl.DisplayList(200);
+  list.text(0, 0, dl.FONT.GOTHIC_14, 'A'.repeat(254) + '\u00E9' + 'B'.repeat(10));
+  var bytes = list.finish(20);
+  // First TEXT op: 254 bytes (all 'A's, no partial UTF-8)
+  assert.strictEqual(bytes[9], 0x01);
+  assert.strictEqual(bytes[15], 254);
+  // Second TEXT op starts at offset 9 + 7 + 254 = 270
+  var secondOp = 9 + 7 + 254;
+  assert.strictEqual(bytes[secondOp], 0x01);
+  var secondLen = bytes[secondOp + 6];
+  // Should be: é (2 bytes) + 10 B's = 12 bytes
+  assert.strictEqual(secondLen, 12);
+  // First byte of second chunk should be 0xC3 (start of é), not 0xA9 (continuation)
+  assert.strictEqual(bytes[secondOp + 7], 0xC3);
+  assert.strictEqual(bytes[secondOp + 8], 0xA9);
+});
+
+test('dl: long text with 3-byte UTF-8 does not split characters across chunks', function () {
+  // 253 ASCII + 世 (3 bytes: E4 B8 96) + more = boundary test
+  var list = new dl.DisplayList(200);
+  list.text(0, 0, dl.FONT.GOTHIC_14, 'A'.repeat(253) + '\u4E16' + 'B'.repeat(10));
+  var bytes = list.finish(20);
+  // First chunk: 253 bytes (all 'A's)
+  assert.strictEqual(bytes[15], 253);
+  var secondOp = 9 + 7 + 253;
+  assert.strictEqual(bytes[secondOp], 0x01);
+  var secondLen = bytes[secondOp + 6];
+  // 3 bytes (世) + 10 B's = 13
+  assert.strictEqual(secondLen, 13);
+  assert.strictEqual(bytes[secondOp + 7], 0xE4);
+  assert.strictEqual(bytes[secondOp + 8], 0xB8);
+  assert.strictEqual(bytes[secondOp + 9], 0x96);
+});
+
 test('dl: fill op encodes x, y, w, h, color', function () {
   var list = new dl.DisplayList(200);
   list.fill(0, 4, 200, 24, 0xE5);
