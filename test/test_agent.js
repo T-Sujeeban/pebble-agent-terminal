@@ -101,7 +101,7 @@ test('config: default values', function () {
   global.localStorage._data = {};
   var cfg = agent.getConfig();
   assert.strictEqual(cfg.apiKey, '');
-  assert.strictEqual(cfg.model, 'mistral-small-latest');
+  assert.strictEqual(cfg.model, 'mistral-large-latest');
   assert.ok(cfg.systemPrompt.length > 0);
 });
 
