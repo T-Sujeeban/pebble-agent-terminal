@@ -157,6 +157,15 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   if (status && status->type == TUPLE_CSTRING && status->length > 0) {
     app_on_status(status->value->cstring);
   }
+  // Downstream command from phone (e.g. CMD_SET_TIMER).
+  Tuple *cmd = dict_find(iter, MESSAGE_KEY_CMD);
+  if (cmd && (cmd->type == TUPLE_INT || cmd->type == TUPLE_UINT)) {
+    uint32_t cmd_val = 0;
+    prv_tuple_u32(cmd, &cmd_val);
+    uint32_t arg_val = 0;
+    prv_tuple_u32(dict_find(iter, MESSAGE_KEY_ARG), &arg_val);
+    app_on_cmd((uint8_t)cmd_val, (int32_t)arg_val);
+  }
   Tuple *chunk = dict_find(iter, MESSAGE_KEY_CHUNK);
   if (!chunk || chunk->type != TUPLE_BYTE_ARRAY) {
     return;

@@ -12,6 +12,10 @@
 // The display-list pipeline (dl.c, net.c, touch_input.c) is inherited from
 // coredevices/pebble-browser-app. The phone side renders agent-generated HTML
 // into a display list via the same DOM-based renderer.
+//
+// Timer: the phone (PKJS) can send CMD_SET_TIMER with ARG = seconds.
+// A countdown runs in the status bar; when it fires, the watch vibrates
+// in a long-short-long pattern and shows "Timer!" on screen.
 
 #include <pebble.h>
 #include "dl.h"
@@ -24,7 +28,8 @@
 #define CHROME_TICK_MS 250
 #define BUSY_TICKS_THINKING 200 // 50s — agent calls can be slow
 #define DICTATION_BYTES 256
-#define CMD_HOME 11 // request welcome page without resetting conversation
+#define TIMER_TICK_MS 1000
+#define TIMER_MAX_SECONDS 86400 // 24h cap
 
 typedef enum {
   STATE_IDLE = 0,
@@ -50,6 +55,12 @@ static int16_t s_width;
 static AppState s_state = STATE_IDLE;
 static uint8_t s_busy_ticks;
 static char s_status[64] = "Agent Terminal";
+
+// --- Timer state -----------------------------------------------------------
+
+static AppTimer *s_timer_tick;
+static uint32_t s_timer_remaining; // seconds left
+static bool s_timer_active;
 
 // --- Layout ----------------------------------------------------------------
 
@@ -103,6 +114,110 @@ void app_on_status(const char *text) {
   layer_mark_dirty(s_bar_layer);
 }
 
+// --- Timer -----------------------------------------------------------------
+
+static void prv_format_timer(char *buf, size_t len, uint32_t seconds) {
+  uint32_t h = seconds / 3600;
+  uint32_t m = (seconds % 3600) / 60;
+  uint32_t s = seconds % 60;
+  if (h > 0) {
+    snprintf(buf, len, "Timer %u:%02u:%02u", (unsigned)h, (unsigned)m, (unsigned)s);
+  } else {
+    snprintf(buf, len, "Timer %u:%02u", (unsigned)m, (unsigned)s);
+  }
+}
+
+static void prv_timer_finished(void *unused) {
+  s_timer_tick = NULL;
+  s_timer_active = false;
+  s_timer_remaining = 0;
+
+  // Long-short-long vibration pattern to get attention
+  static const uint32_t segments[] = { 500, 200, 500, 200, 800 };
+  VibesPattern pat = {
+    .durations = segments,
+    .num_segments = 5,
+  };
+  vibes_enqueue_custom_pattern(pat);
+
+  // Show timer alert on screen
+  snprintf(s_status, sizeof(s_status), "Timer!");
+  s_busy_ticks = 40; // 10s of "Timer!" in the status bar
+  if (!s_chrome_timer) s_chrome_timer = app_timer_register(CHROME_TICK_MS, prv_chrome_tick, NULL);
+  layer_mark_dirty(s_bar_layer);
+
+  // Flash the page area briefly
+  if (s_state == STATE_BROWSING || s_state == STATE_IDLE) {
+    layer_mark_dirty(s_page_layer);
+  }
+}
+
+static void prv_timer_tick(void *unused) {
+  s_timer_tick = NULL;
+  if (!s_timer_active) return;
+  if (s_timer_remaining > 0) {
+    s_timer_remaining--;
+  }
+  if (s_timer_remaining == 0) {
+    prv_timer_finished(NULL);
+    return;
+  }
+  // Update status bar with countdown
+  char buf[32];
+  prv_format_timer(buf, sizeof(buf), s_timer_remaining);
+  strncpy(s_status, buf, sizeof(s_status) - 1);
+  s_status[sizeof(s_status) - 1] = '\0';
+  layer_mark_dirty(s_bar_layer);
+  s_timer_tick = app_timer_register(TIMER_TICK_MS, prv_timer_tick, NULL);
+}
+
+static void prv_start_timer(uint32_t seconds) {
+  if (seconds == 0 || seconds > TIMER_MAX_SECONDS) return;
+
+  // Cancel any existing timer
+  if (s_timer_tick) {
+    app_timer_cancel(s_timer_tick);
+    s_timer_tick = NULL;
+  }
+
+  s_timer_remaining = seconds;
+  s_timer_active = true;
+
+  // Show immediate feedback
+  char buf[32];
+  prv_format_timer(buf, sizeof(buf), seconds);
+  strncpy(s_status, buf, sizeof(s_status) - 1);
+  s_status[sizeof(s_status) - 1] = '\0';
+  layer_mark_dirty(s_bar_layer);
+
+  // Start the 1s tick
+  s_timer_tick = app_timer_register(TIMER_TICK_MS, prv_timer_tick, NULL);
+
+  APP_LOG(APP_LOG_LEVEL_INFO, "timer started: %us", (unsigned)seconds);
+}
+
+static void prv_cancel_timer(void) {
+  if (s_timer_tick) {
+    app_timer_cancel(s_timer_tick);
+    s_timer_tick = NULL;
+  }
+  s_timer_active = false;
+  s_timer_remaining = 0;
+}
+
+// --- Downstream commands (phone → watch) -----------------------------------
+
+// Called from net.c when the phone sends a CMD tuple.
+void app_on_cmd(uint8_t cmd, int32_t arg) {
+  switch (cmd) {
+    case CMD_SET_TIMER:
+      prv_start_timer((uint32_t)arg);
+      break;
+    default:
+      break;
+  }
+}
+
 // --- State transitions -----------------------------------------------------
 
 static void prv_set_state(AppState state) {
@@ -110,7 +225,9 @@ static void prv_set_state(AppState state) {
   switch (state) {
     case STATE_IDLE:
       prv_clear_busy();
-      snprintf(s_status, sizeof(s_status), "Agent Terminal");
+      if (!s_timer_active) {
+        snprintf(s_status, sizeof(s_status), "Agent Terminal");
+      }
       free(s_page);
       s_page = NULL;
       s_have_page = false;
@@ -212,7 +329,7 @@ static void prv_page_received(uint8_t *data, size_t len, uint32_t page_id, void 
   prv_set_state(STATE_BROWSING);
 }
 
-// --- Rendering -------------------------------------------------------------
+// --- Rendering ---------------------------------------------------------
 
 static void prv_page_update(Layer *layer, GContext *ctx) {
   GRect b = layer_get_bounds(layer);
@@ -341,6 +458,7 @@ static void prv_window_load(Window *window) {
 static void prv_window_unload(Window *window) {
   if (s_hello_timer) { app_timer_cancel(s_hello_timer); s_hello_timer = NULL; }
   if (s_chrome_timer) { app_timer_cancel(s_chrome_timer); s_chrome_timer = NULL; }
+  prv_cancel_timer();
   if (s_dictation) { dictation_session_destroy(s_dictation); s_dictation = NULL; }
   if (s_touch_active) touch_input_deinit(&s_touch);
   net_deinit();

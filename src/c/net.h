@@ -18,12 +18,16 @@ typedef void (*NetPageHandler)(uint8_t *data, size_t len, uint32_t page_id, void
 void net_init(NetPageHandler handler, void *ctx);
 void net_deinit(void);
 
-// Upstream commands. Mirrored in src/pkjs/index.js.
+// Upstream commands (watch → phone). Mirrored in src/pkjs/index.js.
 // arg = screen width, OR'd with CMD_HELLO_ROUND on a circular display.
 #define CMD_HELLO 1
 #define CMD_HELLO_ROUND 0x10000
 #define CMD_TEXT 6    // dictated transcription → agent (TEXT = transcription string)
 #define CMD_CANCEL 10 // cancel current agent request
+#define CMD_HOME 11   // request welcome page without resetting conversation
+
+// Downstream commands (phone → watch). Mirrored in src/pkjs/agent.js.
+#define CMD_SET_TIMER 12 // ARG = duration in seconds; watch vibrates when done
 
 // Dictated text travels as a string, not an int.
 bool net_send_text(uint8_t cmd, const char *text);
@@ -38,3 +42,6 @@ bool net_progress(size_t *received, size_t *total);
 
 // Implemented by the app; called when the phone sends a STATUS string.
 void app_on_status(const char *text);
+
+// Implemented by the app; called when the phone sends a downstream CMD.
+void app_on_cmd(uint8_t cmd, int32_t arg);

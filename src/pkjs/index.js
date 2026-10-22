@@ -1,7 +1,7 @@
 // Agent Terminal — PKJS entry point.
 //
-// Handles AppMessage from the watch, delegates to agent.js for Mistral API
-// calls, and manages the settings page.
+// Handles AppMessage from the watch, delegates to agent.js for Mistral Agent +
+// Conversation API calls, and manages the settings page.
 //
 // Runs inside the Pebble mobile app's Chromium WebView (Android). The DOM
 // is available for renderer.js to lay out agent-generated HTML.
@@ -13,11 +13,12 @@ var CMD_HELLO = 1;
 var CMD_TEXT = 6;
 var CMD_CANCEL = 10;
 var CMD_HOME = 11;
+var CMD_SET_TIMER = 12; // downstream: phone → watch (set vibrating timer)
 var CMD_HELLO_ROUND = 0x10000;
 
 var s_width = 200;
 var s_round = false;
-var APP_VERSION = '0.2.2';
+var APP_VERSION = '0.3.0';
 
 function log(msg) {
   console.log('[agent-terminal] ' + msg);
