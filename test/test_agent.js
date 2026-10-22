@@ -13,7 +13,7 @@ var originalRequire = Module.prototype.require;
 Module.prototype.require = function (path) {
   if (path === './renderer') return { render: function () { return Promise.resolve({ bytes: [] }); } };
   if (path === './transport') return { sendBuffer: function () {}, cancel: function () {} };
-  if (path === './skill') return { SKILL_PROMPT: 'test skill prompt' };
+  if (path === './skill') return { SKILL_PROMPT: 'test skill prompt', SKILL_PROMPT_VERSION: 6 };
   return originalRequire.apply(this, arguments);
 };
 
@@ -120,6 +120,18 @@ test('config: partial save preserves other values', function () {
   var cfg = agent.getConfig();
   assert.strictEqual(cfg.apiKey, 'sk-xyz');
   assert.strictEqual(cfg.model, 'mistral-medium-latest');
+});
+
+// Regression test: saveConfig must NOT delete the user's model preference.
+// Bug in v0.3.0: removeStore('agent_model') deleted the preference right after storing it.
+test('config: saveConfig preserves model preference (regression)', function () {
+  global.localStorage._data = {};
+  agent.saveConfig({ apiKey: 'sk-key', model: 'mistral-large-latest' });
+  var cfg = agent.getConfig();
+  assert.strictEqual(cfg.model, 'mistral-large-latest', 'model preference must survive saveConfig');
+  // Agent tracking keys should be cleared so the agent gets recreated
+  assert.strictEqual(global.localStorage.getItem('agent_id'), null, 'agent_id must be cleared');
+  assert.strictEqual(global.localStorage.getItem('agent_created_model'), null, 'agent_created_model must be cleared');
 });
 
 test('extractHtml + sanitizeHtml: full pipeline', function () {

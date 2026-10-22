@@ -18,7 +18,7 @@ var CMD_HELLO_ROUND = 0x10000;
 
 var s_width = 200;
 var s_round = false;
-var APP_VERSION = '0.3.0';
+var APP_VERSION = '0.3.1';
 
 function log(msg) {
   console.log('[agent-terminal] ' + msg);
@@ -179,9 +179,9 @@ var agentCallbacks = {
 // --- Settings page ---------------------------------------------------------
 
 var FALLBACK_MODELS = [
-  'mistral-small-latest',
-  'mistral-medium-latest',
   'mistral-large-latest',
+  'mistral-medium-latest',
+  'mistral-small-latest',
   'open-mistral-nemo',
   'codestral-latest',
 ];
@@ -223,7 +223,7 @@ function configPage() {
     '<label for="key">Mistral API Key</label>' +
     '<input id="key" type="password" placeholder="sk-..." value="' + escAttr(cfg.apiKey) + '">' +
     '<label for="model">Model</label>' +
-    '<input id="model" list="modelList" value="' + escAttr(cfg.model) + '" placeholder="mistral-small-latest">' +
+    '<input id="model" list="modelList" value="' + escAttr(cfg.model) + '" placeholder="mistral-large-latest">' +
     '<datalist id="modelList">' + modelDatalist(cfg.model) + '</datalist>' +
     '<div class="hint">' + modelCount + ' models (' + modelSource + ') — type any model name</div>' +
     '<label for="prompt">System Prompt (advanced)</label>' +

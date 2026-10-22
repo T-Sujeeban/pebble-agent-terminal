@@ -22,7 +22,7 @@ var MISTRAL_CONVERSATIONS_URL = 'https://api.mistral.ai/v1/conversations';
 var MISTRAL_MODELS_URL = 'https://api.mistral.ai/v1/models';
 var OPEN_METEO_GEO_URL = 'https://geocoding-api.open-meteo.com/v1/search';
 var OPEN_METEO_WEATHER_URL = 'https://api.open-meteo.com/v1/forecast';
-var DEFAULT_MODEL = 'mistral-small-latest';
+var DEFAULT_MODEL = 'mistral-large-latest';
 var REQUEST_TIMEOUT_MS = 45000;
 var MAX_TOOL_ROUNDS = 5;
 
@@ -75,9 +75,10 @@ function saveConfig(cfg) {
     store('agent_system_prompt', cfg.systemPrompt);
     store('agent_system_prompt_version', skill.SKILL_PROMPT_VERSION);
   }
-  // Model or prompt changed → agent must be recreated on next use.
+  // Config changed → agent must be recreated on next use.
+  // Note: do NOT remove agent_model — it holds the user's model preference.
   removeStore('agent_id');
-  removeStore('agent_model');
+  removeStore('agent_created_model');
   removeStore('agent_prompt_version');
   // Also reset conversation since the agent changed.
   removeStore('conversation_id');
@@ -128,7 +129,7 @@ function ensureAgent(callback) {
   if (!cfg.apiKey) { callback(null); return; }
 
   var storedAgentId = store('agent_id');
-  var storedModel = store('agent_model');
+  var storedModel = store('agent_created_model');
   var storedPromptVer = store('agent_prompt_version');
 
   if (storedAgentId && storedModel === cfg.model &&
@@ -157,7 +158,7 @@ function ensureAgent(callback) {
         var data = JSON.parse(xhr.responseText);
         var agentId = data.id;
         store('agent_id', agentId);
-        store('agent_model', cfg.model);
+        store('agent_created_model', cfg.model);
         store('agent_prompt_version', skill.SKILL_PROMPT_VERSION);
         log('agent created: ' + agentId);
         callback(agentId);
@@ -655,3 +656,4 @@ module.exports = {
   extractHtml: extractHtml,
   sanitizeHtml: sanitizeHtml,
 };
+
